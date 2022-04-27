@@ -9,7 +9,7 @@ object MultiStatement {
     for (i <- tableNames.indices)
     {
       val deltaTable = DeltaTable.forName(spark, tableNames(i))
-      deltaTable.restoreToversion(123)
+      deltaTable.restoreToversion(0)
     }
   }*/
 
@@ -21,7 +21,7 @@ object MultiStatement {
      }
    catch {
      case error: UnsupportedOperationException =>
-       {print("UnsupportedOperationException")}   //revert changes done and give up doing the rest
+       print("UnsupportedOperationException")   //revert changes done and give up doing the rest
    }
  }
 }
