@@ -1,27 +1,29 @@
 package com.databeans
 
 import org.apache.spark.sql.SparkSession
+import com.databeans.MultiStatementUtils._
 
 object MultiStatement {
-
-  /*def revert(spark: SparkSession, tableNames: Array[String]): Unit = {
+  def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
     import spark.implicits._
-    for (i <- tableNames.indices)
-    {
-      val deltaTable = DeltaTable.forName(spark, tableNames(i))
-      deltaTable.restoreToversion(0)
-    }
-  }*/
 
- def beginTransaction(spark : SparkSession, transactions: Array[String]): Unit = {
-   try
-     {
-       for (i <- transactions.indices)
-       {spark.sql(transactions(i))}
-     }
-   catch {
-     case error: UnsupportedOperationException =>
-       print("UnsupportedOperationException")   //revert changes done and give up doing the rest
-   }
- }
+    createTableStates(spark)
+    for (i <- transactions.indices) {
+      createView(spark, tableNames(i))
+      val initialVersion = getTableVersion(spark, tableNames(i))
+      spark.sql(transactions(i))
+      val latestVersion = getTableVersion(spark, tableNames(i))
+      val updatedTableStates = Seq(TableStates(tableNames(i), initialVersion, latestVersion)).toDF()
+      if (latestVersion >= initialVersion) {
+        updateTableStates(spark, updatedTableStates)
+      }
+      if (i == transactions.indices.end) {
+        for (j <- tableNames.indices) {
+          print("we is about to create the views nigga")
+          createView(spark, tableNames(j))
+        }
+      }
+    }
+  }
 }
+
