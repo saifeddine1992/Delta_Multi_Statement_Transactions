@@ -63,10 +63,10 @@ object MultiStatementUtils {
     import spark.implicits._
 
     for (i <- transactions.indices) {
-      if (getTableVersion(spark, tableNames(i)) > getTableInitialVersion(spark, tableNames(i))) {
+      val initialVersion = getTableInitialVersion(spark, tableNames(i), i)
+      val latestTableVersion = getTableVersion(spark, tableNames(i))
+      if (latestTableVersion > initialVersion) {
         print(s"transaction ${i} already performed")
-        val initialVersion = getTableInitialVersion(spark, tableNames(i), i)
-        val latestTableVersion = getTableVersion(spark, tableNames(i))
         val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestTableVersion)).toDF()
         updateTableStates(spark, updatedTableStates)
       }
