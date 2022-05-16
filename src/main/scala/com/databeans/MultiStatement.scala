@@ -4,26 +4,12 @@ import org.apache.spark.sql.SparkSession
 import com.databeans.MultiStatementUtils._
 
 object MultiStatement {
-  def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
-    import spark.implicits._
-
-    createTableStates(spark)
-    for (i <- transactions.indices) {
-      createView(spark, tableNames(i))
-      val initialVersion = getTableVersion(spark, tableNames(i))
-      spark.sql(transactions(i))
-      val latestVersion = getTableVersion(spark, tableNames(i))
-      val updatedTableStates = Seq(TableStates(tableNames(i), initialVersion, latestVersion)).toDF()
-      if (latestVersion >= initialVersion) {
-        updateTableStates(spark, updatedTableStates)
-      }
-      if (i == transactions.indices.end) {
-        for (j <- tableNames.indices) {
-          print("we is about to create the views nigga")
-          createView(spark, tableNames(j))
-        }
-      }
+  def multiStatementTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String], rerun: Boolean): Unit = {
+    if (!rerun) beginTransaction(spark, transactions, tableNames)
+    else {
+      rerunQueries(spark, transactions, tableNames)
     }
   }
+  //todo : change tableStates schema to include transaction id, like that we can take into account multiple queries on one table.
 }
 
