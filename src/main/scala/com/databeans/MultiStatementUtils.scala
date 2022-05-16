@@ -4,7 +4,9 @@ import io.delta.tables.DeltaTable
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{col, max, min}
 
-case class TableStates(transaction_id : Int, tableName: String, initialVersion: Long, latestVersion: Long)
+import scala.util.Try
+
+case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long)
 
 object MultiStatementUtils {
   def createTableStates(spark: SparkSession): Unit = {
@@ -34,13 +36,9 @@ object MultiStatementUtils {
   def getTableInitialVersion(spark: SparkSession, tableName: String): Long = {
     import spark.implicits._
     import org.apache.spark.sql.functions.col
-    spark.read.format("delta").table("tableStates").select("initialVersion").where(col("tableName") === tableName).as[Long].head()
-  }
-
-  def getTableLatestVersion(spark: SparkSession, tableName: String): Long = {
-    import spark.implicits._
-    import org.apache.spark.sql.functions.col
-    spark.read.format("delta").table("tableStates").select("latestVersion").where(col("tableName") === tableName).as[Long].head()
+    Try {
+      spark.read.format("delta").table("tableStates").select("initialVersion").where(col("tableName") === tableName).as[Long].head()
+    }.getOrElse(0L)
   }
 
   def createView(spark: SparkSession, tableName: String): Unit = {
@@ -69,20 +67,9 @@ object MultiStatementUtils {
     }
   }
 
-  def createViewsInCaseOfFailure(spark: SparkSession, tableNames: Array[String]): Unit = {
-    import spark.implicits._
-    for (i <- tableNames.indices) {
-      val initialVersion = spark.read.format("delta")
-        .table("tableStates")
-        .where(col("tableName") === tableNames(i))
-        .select(min(col("initialVersion")))
-        .as[Long].head()
-      spark.read.format("delta").option("versionAsOf", initialVersion).table(tableNames(i)).createOrReplaceTempView(tableNames(i) + "_view")
-    }
-  }
-
   def rerunQueries(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
     import spark.implicits._
+
     for (i <- transactions.indices) {
       if (getTableVersion(spark, tableNames(i)) > getTableInitialVersion(spark, tableNames(i))) {
         print(s"transaction ${i} already performed")
