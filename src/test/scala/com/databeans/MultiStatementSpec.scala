@@ -33,6 +33,5 @@ class MultiStatementSpec extends QueryTest
     val expectedFakeTabResult = Seq(Data(1, 2, 3)).toDF()
     assert(result.collect() sameElements expectedResult.collect())
     assert(fakeTabResult.collect() sameElements expectedFakeTabResult.collect())
-    spark.sql("select * from tableStates").show()
   }
 }
