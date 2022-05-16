@@ -32,11 +32,11 @@ object MultiStatementUtils {
       .execute()
   }
 
-  def getTableInitialVersion(spark: SparkSession, tableName: String): Long = {
+  def getTableInitialVersion(spark: SparkSession, tableName: String, i: Int): Long = {
     import spark.implicits._
     import org.apache.spark.sql.functions.col
     Try {
-      spark.read.format("delta").table("tableStates").select("initialVersion").where(col("tableName") === tableName).as[Long].head()
+      spark.read.format("delta").table("tableStates").select("initialVersion").where(col("transaction_id") === i).as[Long].head()
     }.getOrElse(0L)
   }
 
@@ -65,7 +65,7 @@ object MultiStatementUtils {
     for (i <- transactions.indices) {
       if (getTableVersion(spark, tableNames(i)) > getTableInitialVersion(spark, tableNames(i))) {
         print(s"transaction ${i} already performed")
-        val initialVersion = getTableInitialVersion(spark, tableNames(i))
+        val initialVersion = getTableInitialVersion(spark, tableNames(i), i)
         val latestTableVersion = getTableVersion(spark, tableNames(i))
         val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestTableVersion)).toDF()
         updateTableStates(spark, updatedTableStates)
