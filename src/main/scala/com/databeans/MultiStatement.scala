@@ -10,6 +10,5 @@ object MultiStatement {
       rerunQueries(spark, transactions, tableNames)
     }
   }
-  //todo : change tableStates schema to include transaction id, like that we can take into account multiple queries on one table.
 }
 
