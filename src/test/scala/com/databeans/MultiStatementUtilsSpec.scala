@@ -31,7 +31,7 @@ class MultiStatementUtilsSpec extends QueryTest
     val expectedUpdateResult = Seq(Data(9, 18, 27)).toDF()
 
     val myFakeTabResult = spark.sql("select * from my_fake_tab_view")
-    val expectedMyFakeTabResult = Seq(Data(5, 10, 15), Data(4, 2, 3)).toDF()
+    val expectedMyFakeTabResult = Seq(Data(4, 2, 3), Data(5, 10, 15)).toDF()
 
     assert(updateResult.collect() sameElements expectedUpdateResult.collect())
     assert(myFakeTabResult.collect() sameElements expectedMyFakeTabResult.collect())

@@ -40,23 +40,21 @@ object MultiStatementUtils {
     }.getOrElse(0L)
   }
 
-  def createView(spark: SparkSession, tableName: String): Unit = {
-    spark.read.format("delta").table(tableName).createOrReplaceTempView(tableName + "_view")
+  def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
+    for (i <- tableNames.indices) {
+      spark.read.format("delta").table(tableNames(i)).createOrReplaceTempView(tableNames(i) + "_view")
+    }
   }
 
   def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
     import spark.implicits._
 
     createTableStates(spark)
-    for (i <- tableNames.indices) {
-      createView(spark, tableNames(i))
-    }
+    createViews(spark, tableNames)
     for (j <- transactions.indices) {
       runAndRegisterQuery(spark, tableNames, transactions(j), j)
       if (j == (transactions.indices.length - 1)) {
-        for (k <- tableNames.indices) {
-          createView(spark, tableNames(k))
-        }
+        createViews(spark, tableNames)
       }
     }
   }
@@ -76,9 +74,7 @@ object MultiStatementUtils {
         runAndRegisterQuery(spark, tableNames, transactions(i), i)
       }
       if (i == (transactions.indices.length - 1)) {
-        for (j <- tableNames.indices) {
-          createView(spark, tableNames(j))
-        }
+        createViews(spark, tableNames)
       }
     }
   }
