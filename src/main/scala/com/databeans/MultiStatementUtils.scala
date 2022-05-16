@@ -83,7 +83,7 @@ object MultiStatementUtils {
     import spark.implicits._
     val initialVersion = getTableVersion(spark, tableNames(i))
     spark.sql(transaction)
-    print(s"transaction s'${i} committed")
+    print(s"transaction ${i} committed")
     val latestVersion = getTableVersion(spark, tableNames(i))
     val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion)).toDF()
     updateTableStates(spark, updatedTableStates)
