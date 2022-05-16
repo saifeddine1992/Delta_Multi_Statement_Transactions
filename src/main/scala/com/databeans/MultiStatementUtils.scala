@@ -53,12 +53,7 @@ object MultiStatementUtils {
       createView(spark, tableNames(i))
     }
     for (j <- transactions.indices) {
-      val initialVersion = getTableVersion(spark, tableNames(j))
-      spark.sql(transactions(j))
-      print(s"transaction s'${j} committed")
-      val latestVersion = getTableVersion(spark, tableNames(j))
-      val updatedTableStates = Seq(TableStates(j, tableNames(j), initialVersion, latestVersion)).toDF()
-      updateTableStates(spark, updatedTableStates)
+      runAndRegisterQuery(spark, tableNames, transactions(j), j)
       if (j == (transactions.indices.length - 1)) {
         for (k <- tableNames.indices) {
           createView(spark, tableNames(k))
@@ -77,12 +72,7 @@ object MultiStatementUtils {
         updateTableStates(spark, updatedTableStates)
       }
       else {
-        val initialVersion = getTableVersion(spark, tableNames(i))
-        spark.sql(transactions(i))
-        print(s"transaction ${i} committed")
-        val latestVersion = getTableVersion(spark, tableNames(i))
-        val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion)).toDF()
-        updateTableStates(spark, updatedTableStates)
+        runAndRegisterQuery(spark, tableNames, transactions(i), i)
       }
       if (i == (transactions.indices.length - 1)) {
         for (j <- tableNames.indices) {
@@ -92,7 +82,7 @@ object MultiStatementUtils {
     }
   }
 
-  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, i: Int, endOfRange: Int, range: Range): Unit = {
+  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, i: Int): Unit = {
     import spark.implicits._
     val initialVersion = getTableVersion(spark, tableNames(i))
     spark.sql(transaction)
@@ -101,5 +91,4 @@ object MultiStatementUtils {
     val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion)).toDF()
     updateTableStates(spark, updatedTableStates)
   }
-
 }
