@@ -50,8 +50,8 @@ object MultiStatementUtils {
   def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
     import spark.implicits._
 
-    createTableStates(spark)
     createViews(spark, tableNames)
+    createTableStates(spark)
     for (j <- transactions.indices) {
       runAndRegisterQuery(spark, tableNames, transactions(j), j)
       if (j == (transactions.indices.length - 1)) {
