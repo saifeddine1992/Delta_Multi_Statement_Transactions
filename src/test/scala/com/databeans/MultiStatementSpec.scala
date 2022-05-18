@@ -23,7 +23,7 @@ class MultiStatementSpec extends QueryTest
     val deleteQuery = "DELETE FROM updates WHERE value = 5"
     val updateQuery = "UPDATE updates SET value = 6 WHERE value = 9"
 
-    multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery), Array("updates", "my_fake_tab","updates"),false)
+    multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery), Array("updates", "my_fake_tab","updates"))
     Thread.sleep(5000)
     multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery), Array("updates", "my_fake_tab", "updates"),true)
 
