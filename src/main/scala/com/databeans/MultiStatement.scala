@@ -8,7 +8,7 @@ object MultiStatement {
     import spark.implicits._
     val biggestPerformedQueryId = getTransactionId(spark)
     if (biggestPerformedQueryId == -1) {
-      beginTransaction(spark, transactions, tableNames) //failure after running query and before updating tableStates
+      beginTransaction(spark, transactions, tableNames) //what if failure occurs after running query and before updating tableStates
     }
     else {
       rerunTransactions(spark, transactions, tableNames, biggestPerformedQueryId)
