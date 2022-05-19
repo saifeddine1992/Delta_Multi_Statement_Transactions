@@ -5,7 +5,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{col, max}
 import scala.util.Try
 
-case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long)
+case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long, isCommitted: Boolean)
 
 object MultiStatementUtils {
   def createTableStates(spark: SparkSession): Unit = {
@@ -26,7 +26,8 @@ object MultiStatementUtils {
         "tableStates.transaction_id = updatedTableStates.transaction_id")
       .whenMatched()
       .updateExpr(Map(
-        "latestVersion" -> "updatedTableStates.latestVersion"))
+        "latestVersion" -> "updatedTableStates.latestVersion",
+        "isCommitted" -> "updatedTableStates.isCommitted"))
       .whenNotMatched()
       .insertAll()
       .execute()
@@ -48,6 +49,14 @@ object MultiStatementUtils {
     }.getOrElse(-1L)
   }
 
+  def isCommitted(spark: SparkSession, transaction_id: Int): AnyVal = {
+    import spark.implicits._
+    import org.apache.spark.sql.functions.col
+    Try {
+      spark.read.format("delta").table("tableStates").select("isCommitted").where(col("transaction_id") === transaction_id).as[Boolean].head()
+    }.getOrElse(-1L)
+  }
+
   def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
     for (i <- tableNames.indices) {
       spark.read.format("delta").table(tableNames(i)).createOrReplaceTempView(tableNames(i) + "_view")
@@ -57,11 +66,13 @@ object MultiStatementUtils {
   def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, i: Int): Unit = {
     import spark.implicits._
     val initialVersion = getTableVersion(spark, tableNames(i))
+    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, -1L, false)).toDF()
+    updatedTableStates.write.format("delta").mode("append").saveAsTable("tableStates")
     spark.sql(transaction)
     print(s"query ${i} performed ")
     val latestVersion = getTableVersion(spark, tableNames(i))
-    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion)).toDF()
-    updateTableStates(spark, updatedTableStates)
+    val commitToTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion, true)).toDF()
+    updateTableStates(spark, commitToTableStates)
   }
 
   def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
@@ -77,14 +88,14 @@ object MultiStatementUtils {
     }
   }
 
-  def rerunTransactions(spark: SparkSession, transactions: Array[String], tableNames: Array[String], biggestPerformedQueryId: Long): Unit = {
+  def rerunTransactions(spark: SparkSession, transactions: Array[String], tableNames: Array[String], latestPerformedQueryId: Long): Unit = {
     import spark.implicits._
 
     for (i <- transactions.indices) {
-      if (i <= biggestPerformedQueryId) {
+      if (i <= latestPerformedQueryId) {
         print(s"query ${i} already performed ")
       }
-      else if (i > biggestPerformedQueryId) {
+      else if (i > latestPerformedQueryId) {
         runAndRegisterQuery(spark, tableNames, transactions(i), i)
       }
       if (i == (transactions.indices.length - 1)) {
