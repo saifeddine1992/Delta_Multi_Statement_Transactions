@@ -73,7 +73,6 @@ object MultiStatementUtils {
       runAndRegisterQuery(spark, tableNames, transactions(j), j)
       if (j == (transactions.indices.length - 1)) {
         createViews(spark, tableNames)
-        spark.sql("Drop table tableStates")
       }
     }
   }
@@ -82,7 +81,10 @@ object MultiStatementUtils {
     import spark.implicits._
 
     for (i <- transactions.indices) {
-      if (i > biggestPerformedQueryId) {
+      if (i <= biggestPerformedQueryId) {
+        print(s"query ${i} already performed ")
+      }
+      else if (i > biggestPerformedQueryId) {
         runAndRegisterQuery(spark, tableNames, transactions(i), i)
       }
       if (i == (transactions.indices.length - 1)) {
