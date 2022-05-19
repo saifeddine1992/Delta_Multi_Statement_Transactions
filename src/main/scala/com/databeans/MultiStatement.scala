@@ -4,10 +4,14 @@ import org.apache.spark.sql.SparkSession
 import com.databeans.MultiStatementUtils._
 
 object MultiStatement {
-  def multiStatementTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String], rerun: Boolean = false): Unit = {
-    if (!rerun) beginTransaction(spark, transactions, tableNames)
+  def multiStatementTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
+    import spark.implicits._
+    val biggestPerformedQueryId = getTransactionId(spark)
+    if (biggestPerformedQueryId == -1) {
+      beginTransaction(spark, transactions, tableNames) //what if failure occurs after running query and before updating tableStates
+    }
     else {
-      rerunQueries(spark, transactions, tableNames)
+      rerunTransactions(spark, transactions, tableNames, biggestPerformedQueryId)
     }
   }
 }

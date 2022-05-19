@@ -25,7 +25,7 @@ class MultiStatementSpec extends QueryTest
 
     multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery), Array("updates", "my_fake_tab","updates"))
     Thread.sleep(5000)
-    multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery), Array("updates", "my_fake_tab", "updates"),true)
+    multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery), Array("updates", "my_fake_tab", "updates"))
 
     val result = spark.sql("select * from updates_view")
     val expectedResult = Seq(Data(6, 18, 27)).toDF()

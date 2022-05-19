@@ -1,9 +1,8 @@
 package com.databeans
 
 import io.delta.tables.DeltaTable
-import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{col, max}
-
 import scala.util.Try
 
 case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long)
@@ -41,10 +40,28 @@ object MultiStatementUtils {
     }.getOrElse(0L)
   }
 
+  def getTransactionId(spark: SparkSession): Long = {
+    import spark.implicits._
+    import org.apache.spark.sql.functions.col
+    Try {
+      spark.read.format("delta").table("tableStates").select(max(col("transaction_id"))).as[Long].head()
+    }.getOrElse(-1L)
+  }
+
   def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
     for (i <- tableNames.indices) {
       spark.read.format("delta").table(tableNames(i)).createOrReplaceTempView(tableNames(i) + "_view")
     }
+  }
+
+  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, i: Int): Unit = {
+    import spark.implicits._
+    val initialVersion = getTableVersion(spark, tableNames(i))
+    spark.sql(transaction)
+    print(s"query ${i} performed ")
+    val latestVersion = getTableVersion(spark, tableNames(i))
+    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion)).toDF()
+    updateTableStates(spark, updatedTableStates)
   }
 
   def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
@@ -56,38 +73,22 @@ object MultiStatementUtils {
       runAndRegisterQuery(spark, tableNames, transactions(j), j)
       if (j == (transactions.indices.length - 1)) {
         createViews(spark, tableNames)
+        spark.sql("Drop table tableStates")
       }
     }
   }
 
-  def rerunQueries(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
+  def rerunTransactions(spark: SparkSession, transactions: Array[String], tableNames: Array[String], biggestPerformedQueryId: Long): Unit = {
     import spark.implicits._
 
     for (i <- transactions.indices) {
-      val initialVersion = getTableInitialVersion(spark, tableNames(i), i)
-      val latestTableVersion = getTableVersion(spark, tableNames(i))
-      if (latestTableVersion > initialVersion) {
-        print(s"transaction ${i} already performed")
-        val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestTableVersion)).toDF()
-        try {updateTableStates(spark, updatedTableStates)}
-        catch { case e : AnalysisException => beginTransaction(spark, transactions, tableNames)}
-      }
-      else {
+      if (i > biggestPerformedQueryId) {
         runAndRegisterQuery(spark, tableNames, transactions(i), i)
       }
       if (i == (transactions.indices.length - 1)) {
         createViews(spark, tableNames)
+        spark.sql("Drop table tableStates")
       }
     }
-  }
-
-  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, i: Int): Unit = {
-    import spark.implicits._
-    val initialVersion = getTableVersion(spark, tableNames(i))
-    spark.sql(transaction)
-    print(s"transaction ${i} committed")
-    val latestVersion = getTableVersion(spark, tableNames(i))
-    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion)).toDF()
-    updateTableStates(spark, updatedTableStates)
   }
 }
