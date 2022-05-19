@@ -1,7 +1,7 @@
 package com.databeans
 
 import io.delta.tables.DeltaTable
-import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{col, max}
 import scala.util.Try
 
