@@ -35,7 +35,7 @@ object MultiStatementUtils {
 
   def getTableInitialVersion(spark: SparkSession, tableName: String, i: Int): Long = {
     import spark.implicits._
-    import org.apache.spark.sql.functions.col
+
     Try {
       spark.read.format("delta").table("tableStates").select("initialVersion").where(col("transaction_id") === i).as[Long].head()
     }.getOrElse(0L)
@@ -43,7 +43,7 @@ object MultiStatementUtils {
 
   def getTransactionId(spark: SparkSession): Long = {
     import spark.implicits._
-    import org.apache.spark.sql.functions.col
+
     Try {
       spark.read.format("delta").table("tableStates").select(max(col("transaction_id"))).as[Long].head()
     }.getOrElse(-1L)
@@ -51,7 +51,7 @@ object MultiStatementUtils {
 
   def isCommitted(spark: SparkSession, transaction_id: Int): AnyVal = {
     import spark.implicits._
-    import org.apache.spark.sql.functions.col
+
     Try {
       spark.read.format("delta").table("tableStates").select("isCommitted").where(col("transaction_id") === transaction_id).as[Boolean].head()
     }.getOrElse(-1L)
@@ -66,6 +66,7 @@ object MultiStatementUtils {
 
   def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, i: Int): Unit = {
     import spark.implicits._
+
     val initialVersion = getTableVersion(spark, tableNames(i))
     val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, -1L, false)).toDF()
     updatedTableStates.write.format("delta").mode("append").saveAsTable("tableStates")
