@@ -10,7 +10,7 @@ class MultiStatementSpec extends QueryTest
   with SharedSparkSession
   with DeltaExtendedSparkSession {
 
-  test("multiStatementTransaction should rerun multiple non-failing SQL queries") {
+  test("multiStatementTransaction should rerun multiple non-failing SQL queries"){
     val s = spark
     import s.implicits._
 
