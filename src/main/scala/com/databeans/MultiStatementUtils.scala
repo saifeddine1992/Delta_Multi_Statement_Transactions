@@ -60,7 +60,7 @@ object MultiStatementUtils {
   def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
     val distinctTables = tableNames.distinct
     for (i <- distinctTables.indices) {
-      spark.read.format("delta").option("AsOfVersion", getTableVersion(spark, distinctTables(i))).table(distinctTables(i)).createOrReplaceTempView(tableNames(i) + "_view")
+      spark.read.format("delta").option("versionAsOf", getTableVersion(spark, distinctTables(i))).table(distinctTables(i)).createOrReplaceTempView(tableNames(i) + "_view")
     }
   }
 
