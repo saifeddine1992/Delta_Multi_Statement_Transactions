@@ -12,7 +12,7 @@ case class Data(value: Long, keys: Long, option: Long)
 class MultiStatementUtilsSpec extends QueryTest
   with SharedSparkSession
   with DeltaExtendedSparkSession {
-  test("beginTransaction should run multiple non-failing SQL queries") {
+  test("beginTransaction should run multiple non-failing SQL queries"){
     val s = spark
     import s.implicits._
 
