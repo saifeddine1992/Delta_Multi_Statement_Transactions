@@ -102,7 +102,6 @@ object MultiStatementUtils {
       }
       if (i == (transactions.indices.length - 1)) {
         createViews(spark, tableNames)
-        spark.sql("Drop table tableStates")
       }
     }
   }
