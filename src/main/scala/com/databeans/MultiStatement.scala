@@ -24,7 +24,7 @@ object MultiStatement {
         }
         else if (((isCommitted(spark, tableStates, i) == -1) & (i > 0)) || (isCommitted(spark, tableStates, i) == true)){
           val latestTransaction_id = getTransactionId(spark, tableStates)
-          rerunTransactions(spark, transactions, tableNames,tableStates, latestTransaction_id)
+          rerunTransactions(spark, transactions, tableNames, tableStates, latestTransaction_id)
           loop.break
         }
       }

@@ -70,7 +70,7 @@ object MultiStatementUtils {
     }
   }
 
-  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, tableStates: String ,i: Int): Unit = {
+  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, tableStates: String , i: Int): Unit = {
     import spark.implicits._
 
     val initialVersion = getTableVersion(spark, tableNames(i))
