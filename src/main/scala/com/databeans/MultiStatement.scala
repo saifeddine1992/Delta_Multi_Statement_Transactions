@@ -6,7 +6,7 @@ import com.databeans.MultiStatementUtils._
 object MultiStatement {
   def multiStatementTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
     import spark.implicits._
-    val tableStates = createUniqueTableName()
+    val tableStates = createUniqueTableName(tableNames)
     val loop = new Breaks
     loop.breakable {
       for (i <- transactions.indices) {
