@@ -10,7 +10,7 @@ case class TableStates(transaction_id: Int, tableName: String, initialVersion: L
 object MultiStatementUtils {
 
   def createUniqueTableName(tableNames : Array[String]): String = {
-    val uniqueString = "tableStatesOf" + tableNames.distinct.mkString("")
+    val uniqueString = "tableStatesOf" + tableNames.distinct.mkString("_")
     uniqueString
   }
 
