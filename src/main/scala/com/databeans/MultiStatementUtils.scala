@@ -8,10 +8,16 @@ import scala.util.Try
 case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long, isCommitted: Boolean)
 
 object MultiStatementUtils {
-  def createTableStates(spark: SparkSession): Unit = {
+
+  def createUniqueTableName(): String = {
+    val uniqueString = "tableStates" + System.currentTimeMillis().toString
+    uniqueString
+  }
+
+  def createTableStates(spark: SparkSession, tableStates: String): Unit = {
     import spark.implicits._
     val emptyConf: Seq[TableStates] = Seq()
-    emptyConf.toDF().write.format("delta").mode("overwrite").saveAsTable("tableStates")
+    emptyConf.toDF().write.format("delta").mode("overwrite").saveAsTable(tableStates)
   }
 
   def getTableVersion(spark: SparkSession, tableName: String): Long = {
@@ -20,10 +26,10 @@ object MultiStatementUtils {
     DeltaTable.forName(spark, tableName).history().select(max(col("version"))).as[Long].head()
   }
 
-  def updateTableStates(spark: SparkSession, updatedTableStates: DataFrame): Unit = {
-    DeltaTable.forName(spark, "tableStates").as("tableStates")
+  def updateTableStates(spark: SparkSession, updatedTableStates: DataFrame, tableStates: String): Unit = {
+    DeltaTable.forName(spark, tableStates).as(tableStates)
       .merge(updatedTableStates.as("updatedTableStates"),
-        "tableStates.transaction_id = updatedTableStates.transaction_id")
+        s"${tableStates}.transaction_id = updatedTableStates.transaction_id")
       .whenMatched()
       .updateExpr(Map(
         "latestVersion" -> "updatedTableStates.latestVersion",
@@ -33,27 +39,27 @@ object MultiStatementUtils {
       .execute()
   }
 
-  def getTableInitialVersion(spark: SparkSession, tableName: String, i: Int): Long = {
+  def getTableInitialVersion(spark: SparkSession, tableName: String, tableStates: String, i: Int): Long = {
     import spark.implicits._
 
     Try {
-      spark.read.format("delta").table("tableStates").select("initialVersion").where(col("transaction_id") === i).as[Long].head()
+      spark.read.format("delta").table(tableStates).select("initialVersion").where(col("transaction_id") === i).as[Long].head()
     }.getOrElse(0L)
   }
 
-  def getTransactionId(spark: SparkSession): Long = {
+  def getTransactionId(spark: SparkSession, tableStates: String): Long = {
     import spark.implicits._
 
     Try {
-      spark.read.format("delta").table("tableStates").select(max(col("transaction_id"))).as[Long].head()
+      spark.read.format("delta").table(tableStates).select(max(col("transaction_id"))).as[Long].head()
     }.getOrElse(-1L)
   }
 
-  def isCommitted(spark: SparkSession, transaction_id: Int): AnyVal = {
+  def isCommitted(spark: SparkSession, tableStates: String, transaction_id: Int): AnyVal = {
     import spark.implicits._
 
     Try {
-      spark.read.format("delta").table("tableStates").select("isCommitted").where(col("transaction_id") === transaction_id).as[Boolean].head()
+      spark.read.format("delta").table(tableStates).select("isCommitted").where(col("transaction_id") === transaction_id).as[Boolean].head()
     }.getOrElse(-1L)
   }
 
@@ -64,33 +70,33 @@ object MultiStatementUtils {
     }
   }
 
-  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, i: Int): Unit = {
+  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, tableStates: String ,i: Int): Unit = {
     import spark.implicits._
 
     val initialVersion = getTableVersion(spark, tableNames(i))
     val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, -1L, false)).toDF()
-    updatedTableStates.write.format("delta").mode("append").saveAsTable("tableStates")
+    updatedTableStates.write.format("delta").mode("append").saveAsTable(tableStates)
     spark.sql(transaction)
     print(s"query ${i} performed ")
     val latestVersion = getTableVersion(spark, tableNames(i))
     val commitToTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion, true)).toDF()
-    updateTableStates(spark, commitToTableStates)
+    updateTableStates(spark, commitToTableStates, tableStates)
   }
 
-  def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String]): Unit = {
+  def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String], tableStates: String): Unit = {
     import spark.implicits._
 
     createViews(spark, tableNames)
-    createTableStates(spark)
+    createTableStates(spark, tableStates)
     for (j <- transactions.indices) {
-      runAndRegisterQuery(spark, tableNames, transactions(j), j)
+      runAndRegisterQuery(spark, tableNames, transactions(j),tableStates, j)
       if (j == (transactions.indices.length - 1)) {
         createViews(spark, tableNames)
       }
     }
   }
 
-  def rerunTransactions(spark: SparkSession, transactions: Array[String], tableNames: Array[String], latestPerformedQueryId: Long): Unit = {
+  def rerunTransactions(spark: SparkSession, transactions: Array[String], tableNames: Array[String], tableStates: String, latestPerformedQueryId: Long): Unit = {
     import spark.implicits._
 
     for (i <- transactions.indices) {
@@ -98,10 +104,11 @@ object MultiStatementUtils {
         print(s"query ${i} already performed ")
       }
       else if (i > latestPerformedQueryId) {
-        runAndRegisterQuery(spark, tableNames, transactions(i), i)
+        runAndRegisterQuery(spark, tableNames, transactions(i), tableStates, i)
       }
       if (i == (transactions.indices.length - 1)) {
         createViews(spark, tableNames)
+        spark.sql(s"drop table ${tableStates}")
       }
     }
   }
