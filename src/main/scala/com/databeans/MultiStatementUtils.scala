@@ -66,7 +66,7 @@ object MultiStatementUtils {
   def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
     val distinctTables = tableNames.distinct
     for (i <- distinctTables.indices) {
-      spark.read.format("delta").option("versionAsOf", getTableVersion(spark, distinctTables(i))).table(distinctTables(i)).createOrReplaceTempView(tableNames(i) + "_view")
+      spark.read.format("delta").option("versionAsOf", getTableVersion(spark, distinctTables(i))).table(distinctTables(i)).createOrReplaceTempView(distinctTables(i) + "_view")
     }
   }
 
@@ -92,7 +92,7 @@ object MultiStatementUtils {
       runAndRegisterQuery(spark, tableNames, transactions(j),tableStates, j)
       if (j == (transactions.indices.length - 1)) {
         createViews(spark, tableNames)
-        //spark.sql(s"drop table ${tableStates}")
+        spark.sql(s"drop table ${tableStates}")
       }
     }
   }
