@@ -1,6 +1,5 @@
 package com.databeans
 
-import com.databeans.MultiStatement._
 import com.databeans.MultiStatementUtils.beginTransaction
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.delta.test.DeltaExtendedSparkSession

@@ -45,6 +45,11 @@ object MultiStatementUtils {
     spark.read.format("delta").table(tableStates).where(col("tableName") === tableNames(i)).select(min(col("initialVersion"))).as[Long].head()
   }
 
+  def getVersionBeforeQuery(spark: SparkSession, tableStates: String, i: Int): Long = {
+    import spark.implicits._
+    spark.read.format("delta").table(tableStates).where(col("transaction_id") === i).select(max(col("initialVersion"))).as[Long].head()
+  }
+
   def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
     val distinctTables = tableNames.distinct
     for (i <- distinctTables.indices) {
@@ -65,12 +70,18 @@ object MultiStatementUtils {
     updateTableStates(spark, commitToTableStates, tableStates)
   }
 
-  def isCommitted(spark: SparkSession, tableStates: String, transaction_id: Int): AnyVal = {
+  def isCommitted(spark: SparkSession, tableStates: String, transaction_id: Int, tableNames: Array[String]) : AnyVal = {
     import spark.implicits._
 
-    Try {
+    val isRegistered = Try {
       spark.read.format("delta").table(tableStates).select("isCommitted").where(col("transaction_id") === transaction_id).as[Boolean].head()
     }.getOrElse(-1L)
+
+    isRegistered match {
+      case true => true
+      case false => if (getCurrentTableVersion(spark, tableNames(transaction_id)) - getVersionBeforeQuery(spark, tableStates, transaction_id) == 1) {true} else {false}
+      case _ => false
+    }
   }
 
   def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String], tableStates: String): Unit = {
@@ -85,7 +96,7 @@ object MultiStatementUtils {
           runAndRegisterQuery(spark, tableNames, transactions(j), tableStates, j)
         } catch {
           case  _: Throwable =>
-            if (isCommitted(spark, tableStates, j) == true) {
+            if (isCommitted(spark, tableStates, j, tableNames) == true){
               for (i <- (0 to j).reverse) {
                 spark.sql(s"RESTORE TABLE ${tableNames(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, tableNames, i)} ")
               }
