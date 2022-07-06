@@ -84,17 +84,19 @@ object MultiStatementUtils {
         try {
           runAndRegisterQuery(spark, tableNames, transactions(j), tableStates, j)
         } catch {
-          case e: Throwable =>
+          case  _: Throwable =>
             if (isCommitted(spark, tableStates, j) == true) {
               for (i <- (0 to j).reverse) {
                 spark.sql(s"RESTORE TABLE ${tableNames(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, tableNames, i)} ")
               }
+              spark.sql(s"drop table ${tableStates}")
               loop.break
             }
             else {
               for (i <- (0 until (j-1)).reverse) {
                 spark.sql(s"RESTORE TABLE ${tableNames(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, tableNames, i)} ")
               }
+              spark.sql(s"drop table ${tableStates}")
               loop.break
           }
         }
