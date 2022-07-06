@@ -97,15 +97,17 @@ object MultiStatementUtils {
         } catch {
           case  _: Throwable =>
             if (isCommitted(spark, tableStates, j, tableNames) == true){
-              for (i <- (0 to j).reverse) {
-                spark.sql(s"RESTORE TABLE ${tableNames(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, tableNames, i)} ")
+              val affectedTables = tableNames.slice(0, j).distinct
+              for (i <- affectedTables.indices) {
+                spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
               }
               spark.sql(s"drop table ${tableStates}")
               loop.break
             }
             else {
-              for (i <- (0 until (j-1)).reverse) {
-                spark.sql(s"RESTORE TABLE ${tableNames(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, tableNames, i)} ")
+              val affectedTables = tableNames.slice(0, j -1).distinct
+              for (i <- affectedTables.indices) {
+                spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
               }
               spark.sql(s"drop table ${tableStates}")
               loop.break
