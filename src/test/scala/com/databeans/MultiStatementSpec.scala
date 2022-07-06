@@ -1,6 +1,7 @@
 package com.databeans
 
 import com.databeans.MultiStatement._
+import com.databeans.MultiStatementUtils.beginTransaction
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.delta.test.DeltaExtendedSparkSession
 import org.apache.spark.sql.functions.col
@@ -24,9 +25,9 @@ class MultiStatementSpec extends QueryTest
     val updateQuery = "UPDATE updates SET value = 6 WHERE value = 9"
     val insertQuery = "INSERT INTO  my_fake_tab VALUES (0, 0, 0)"
 
-    multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery, insertQuery), Array("updates", "my_fake_tab", "updates", "my_fake_tab"))
+    beginTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery, insertQuery), Array("updates", "my_fake_tab", "updates", "my_fake_tab"), "tableStates")
     Thread.sleep(5000)
-    multiStatementTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery, insertQuery), Array("updates", "my_fake_tab", "updates", "my_fake_tab"))
+    beginTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery, insertQuery), Array("updates", "my_fake_tab", "updates", "my_fake_tab"),"tableStates")
 
     val result = spark.sql("select * from updates_view")
     val expectedResult = Seq(Data(6, 18, 27)).toDF()

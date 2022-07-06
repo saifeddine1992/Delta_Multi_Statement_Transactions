@@ -2,15 +2,16 @@ package com.databeans
 
 import io.delta.tables.DeltaTable
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions.{col, max}
+import org.apache.spark.sql.functions.{col, max, min}
 import scala.util.Try
+import scala.util.control.Breaks
 
-case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long, isCommitted: Boolean)
+case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, isCommitted: Boolean)
 
 object MultiStatementUtils {
 
-  def createUniqueTableName(tableNames : Array[String]): String = {
-    val uniqueString = "tableStatesOf" + tableNames.distinct.mkString("_")
+  def createUniqueTableName(tableNames: Array[String]): String = {
+    val uniqueString = "tableStatesOf_" + tableNames.distinct.mkString("_")
     uniqueString
   }
 
@@ -20,7 +21,7 @@ object MultiStatementUtils {
     emptyConf.toDF().write.format("delta").mode("overwrite").saveAsTable(tableStates)
   }
 
-  def getTableVersion(spark: SparkSession, tableName: String): Long = {
+  def getCurrentTableVersion(spark: SparkSession, tableName: String): Long = {
     import io.delta.tables._
     import spark.implicits._
     DeltaTable.forName(spark, tableName).history().select(max(col("version"))).as[Long].head()
@@ -32,27 +33,36 @@ object MultiStatementUtils {
         s"${tableStates}.transaction_id = updatedTableStates.transaction_id")
       .whenMatched()
       .updateExpr(Map(
-        "latestVersion" -> "updatedTableStates.latestVersion",
+        "initialVersion" -> "updatedTableStates.initialVersion",
         "isCommitted" -> "updatedTableStates.isCommitted"))
       .whenNotMatched()
       .insertAll()
       .execute()
   }
 
-  def getTableInitialVersion(spark: SparkSession, tableName: String, tableStates: String, i: Int): Long = {
+  def getInitialTableVersion(spark: SparkSession, tableStates: String, tableNames: Array[String], i: Int): Long = {
     import spark.implicits._
-
-    Try {
-      spark.read.format("delta").table(tableStates).select("initialVersion").where(col("transaction_id") === i).as[Long].head()
-    }.getOrElse(0L)
+    spark.read.format("delta").table(tableStates).where(col("tableName") === tableNames(i)).select(min(col("initialVersion"))).as[Long].head()
   }
 
-  def getTransactionId(spark: SparkSession, tableStates: String): Long = {
+  def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
+    val distinctTables = tableNames.distinct
+    for (i <- distinctTables.indices) {
+      spark.read.format("delta").option("versionAsOf", getCurrentTableVersion(spark, distinctTables(i))).table(distinctTables(i)).createOrReplaceTempView(distinctTables(i) + "_view")
+    }
+  }
+
+  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, tableStates: String, i: Int): Unit = {
     import spark.implicits._
 
-    Try {
-      spark.read.format("delta").table(tableStates).select(max(col("transaction_id"))).as[Long].head()
-    }.getOrElse(-1L)
+    val initialVersion = getCurrentTableVersion(spark, tableNames(i))
+    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, false)).toDF()
+    updatedTableStates.write.format("delta").mode("append").saveAsTable(tableStates)
+    spark.sql(transaction)
+    print(s"query ${i} performed ")
+    val latestVersion = getCurrentTableVersion(spark, tableNames(i))
+    val commitToTableStates = Seq(TableStates(i, tableNames(i), latestVersion, true)).toDF()
+    updateTableStates(spark, commitToTableStates, tableStates)
   }
 
   def isCommitted(spark: SparkSession, tableStates: String, transaction_id: Int): AnyVal = {
@@ -63,53 +73,35 @@ object MultiStatementUtils {
     }.getOrElse(-1L)
   }
 
-  def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
-    val distinctTables = tableNames.distinct
-    for (i <- distinctTables.indices) {
-      spark.read.format("delta").option("versionAsOf", getTableVersion(spark, distinctTables(i))).table(distinctTables(i)).createOrReplaceTempView(distinctTables(i) + "_view")
-    }
-  }
-
-  def runAndRegisterQuery(spark: SparkSession, tableNames: Array[String], transaction: String, tableStates: String , i: Int): Unit = {
-    import spark.implicits._
-
-    val initialVersion = getTableVersion(spark, tableNames(i))
-    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, -1L, false)).toDF()
-    updatedTableStates.write.format("delta").mode("append").saveAsTable(tableStates)
-    spark.sql(transaction)
-    print(s"query ${i} performed ")
-    val latestVersion = getTableVersion(spark, tableNames(i))
-    val commitToTableStates = Seq(TableStates(i, tableNames(i), initialVersion, latestVersion, true)).toDF()
-    updateTableStates(spark, commitToTableStates, tableStates)
-  }
-
   def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String], tableStates: String): Unit = {
     import spark.implicits._
 
     createViews(spark, tableNames)
     createTableStates(spark, tableStates)
-    for (j <- transactions.indices) {
-      runAndRegisterQuery(spark, tableNames, transactions(j),tableStates, j)
-      if (j == (transactions.indices.length - 1)) {
-        createViews(spark, tableNames)
-        spark.sql(s"drop table ${tableStates}")
-      }
-    }
-  }
-
-  def rerunTransactions(spark: SparkSession, transactions: Array[String], tableNames: Array[String], tableStates: String, latestPerformedQueryId: Long): Unit = {
-    import spark.implicits._
-
-    for (i <- transactions.indices) {
-      if (i <= latestPerformedQueryId) {
-        print(s"query ${i} already performed ")
-      }
-      else if (i > latestPerformedQueryId) {
-        runAndRegisterQuery(spark, tableNames, transactions(i), tableStates, i)
-      }
-      if (i == (transactions.indices.length - 1)) {
-        createViews(spark, tableNames)
-        spark.sql(s"drop table ${tableStates}")
+    val loop = new Breaks
+    loop.breakable {
+      for (j <- transactions.indices) {
+        try {
+          runAndRegisterQuery(spark, tableNames, transactions(j), tableStates, j)
+        } catch {
+          case e: Throwable =>
+            if (isCommitted(spark, tableStates, j) == true) {
+              for (i <- (0 to j).reverse) {
+                spark.sql(s"RESTORE TABLE ${tableNames(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, tableNames, i)} ")
+              }
+              loop.break
+            }
+            else {
+              for (i <- (0 until (j-1)).reverse) {
+                spark.sql(s"RESTORE TABLE ${tableNames(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, tableNames, i)} ")
+              }
+              loop.break
+          }
+        }
+        if (j == (transactions.indices.length - 1)) {
+          createViews(spark, tableNames)
+          spark.sql(s"drop table ${tableStates}")
+        }
       }
     }
   }
