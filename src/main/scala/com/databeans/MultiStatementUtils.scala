@@ -47,7 +47,7 @@ object MultiStatementUtils {
 
   def getVersionBeforeQuery(spark: SparkSession, tableStates: String, i: Int): Long = {
     import spark.implicits._
-    spark.read.format("delta").table(tableStates).where(col("transaction_id") === i).select(max(col("initialVersion"))).as[Long].head()
+    spark.read.format("delta").table(tableStates).where(col("transaction_id") === i).select(col("initialVersion")).as[Long].head()
   }
 
   def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
@@ -80,7 +80,7 @@ object MultiStatementUtils {
     isRegistered match {
       case true => true
       case false => if (getCurrentTableVersion(spark, tableNames(transaction_id)) - getVersionBeforeQuery(spark, tableStates, transaction_id) == 1) {true} else {false}
-      case _ => false
+      case -1 => false
     }
   }
 
