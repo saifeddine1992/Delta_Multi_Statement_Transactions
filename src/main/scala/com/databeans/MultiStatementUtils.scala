@@ -6,7 +6,7 @@ import org.apache.spark.sql.functions.{col, max, min}
 import scala.util.Try
 import scala.util.control.Breaks
 
-case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, isCommitted: Boolean)
+case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long, isCommitted: Boolean)
 
 object MultiStatementUtils {
 
@@ -33,7 +33,7 @@ object MultiStatementUtils {
         s"${tableStates}.transaction_id = updatedTableStates.transaction_id")
       .whenMatched()
       .updateExpr(Map(
-        "initialVersion" -> "updatedTableStates.initialVersion",
+        "initialVersion" -> "updatedTableStates.latestVersion",
         "isCommitted" -> "updatedTableStates.isCommitted"))
       .whenNotMatched()
       .insertAll()
@@ -56,12 +56,12 @@ object MultiStatementUtils {
     import spark.implicits._
 
     val initialVersion = getCurrentTableVersion(spark, tableNames(i))
-    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, false)).toDF()
+    val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, -1, false)).toDF()
     updateTableStates(spark, updatedTableStates, tableStates)
     spark.sql(transaction)
     print(s"query ${i} performed ")
     val latestVersion = getCurrentTableVersion(spark, tableNames(i))
-    val commitToTableStates = Seq(TableStates(i, tableNames(i), latestVersion, true)).toDF()
+    val commitToTableStates = Seq(TableStates(i, tableNames(i),initialVersion, latestVersion, true)).toDF()
     updateTableStates(spark, commitToTableStates, tableStates)
   }
 
