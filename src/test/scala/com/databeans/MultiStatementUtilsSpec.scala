@@ -37,5 +37,17 @@ class MultiStatementUtilsSpec extends QueryTest
     assert(updateResult.collect() sameElements expectedUpdateResult.collect())
     assert(myFakeTabResult.collect() sameElements expectedMyFakeTabResult.collect())
   }
+  test("extractTableNamesFromQuery should extract tableNames SQL queries"){
+    val s = spark
+
+    val deleteQuery = "DELETE FROM updates WHERE value = 5"
+    val updateQuery = "UPDATE my_fake_tab SET value = 4 WHERE value = 1"
+
+    val result = createTableNames(spark, Array(deleteQuery, updateQuery))
+    val expectedUpdateResult = Array("updates", "my_fake_tab")
+
+    assert(result sameElements expectedUpdateResult)
+
+  }
 }
 

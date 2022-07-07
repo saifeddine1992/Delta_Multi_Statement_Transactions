@@ -122,4 +122,21 @@ object MultiStatementUtils {
       }
     }
   }
+
+  def extractTableNamesFromQuery(spark: SparkSession, query: String): String = {
+    import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+    val logicalPlan = spark.sessionState.sqlParser.parsePlan(query)
+      val tablesInQuery = logicalPlan.collect { case r: UnresolvedRelation => r.tableName }
+    if (tablesInQuery.nonEmpty){
+      tablesInQuery.head
+    }
+    else {
+      query.split(" ")(2)
+    }
+  }
+
+  def createTableNames(spark: SparkSession, transactions: Array[String]): Array[String] = {
+    val tableNames = Array.tabulate(transactions.length)(t => extractTableNamesFromQuery(spark, transactions(t)))
+    tableNames
+  }
 }
