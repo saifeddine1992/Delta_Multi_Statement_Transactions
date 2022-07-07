@@ -100,6 +100,7 @@ object MultiStatementUtils {
               val affectedTables = tableNames.slice(0, j).distinct
               for (i <- affectedTables.indices) {
                 spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
+                print(s"${affectedTables(i)} rolled back ")
               }
               spark.sql(s"drop table ${tableStates}")
               loop.break
@@ -108,6 +109,7 @@ object MultiStatementUtils {
               val affectedTables = tableNames.slice(0, j -1).distinct
               for (i <- affectedTables.indices) {
                 spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
+                print(s"${affectedTables(i)} rolled back ")
               }
               spark.sql(s"drop table ${tableStates}")
               loop.break
