@@ -62,7 +62,7 @@ object MultiStatementUtils {
 
     val initialVersion = getCurrentTableVersion(spark, tableNames(i))
     val updatedTableStates = Seq(TableStates(i, tableNames(i), initialVersion, false)).toDF()
-    updatedTableStates.write.format("delta").mode("append").saveAsTable(tableStates)
+    updateTableStates(spark, updatedTableStates, tableStates)
     spark.sql(transaction)
     print(s"query ${i} performed ")
     val latestVersion = getCurrentTableVersion(spark, tableNames(i))
@@ -93,45 +93,6 @@ object MultiStatementUtils {
     }
   }
 
-  def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String], tableStates: String): Unit = {
-    import spark.implicits._
-
-    createViews(spark, tableNames)
-    createTableStates(spark, tableStates)
-    val loop = new Breaks
-    loop.breakable {
-      for (j <- transactions.indices) {
-        try {
-          runAndRegisterQuery(spark, tableNames, transactions(j), tableStates, j)
-        } catch {
-          case _: Throwable =>
-            if (isCommitted(spark, tableStates, j, tableNames)) {
-              val affectedTables = tableNames.slice(0, j + 1).distinct
-              for (i <- affectedTables.indices) {
-                spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
-                print(s"${affectedTables(i)} rolled back ")
-              }
-              spark.sql(s"drop table ${tableStates}")
-              loop.break
-            }
-            else {
-              val affectedTables = tableNames.slice(0, j).distinct
-              for (i <- affectedTables.indices) {
-                spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
-                print(s"${affectedTables(i)} rolled back ")
-              }
-              spark.sql(s"drop table ${tableStates}")
-              loop.break
-            }
-        }
-        if (j == (transactions.indices.length - 1)) {
-          createViews(spark, tableNames)
-          spark.sql(s"drop table ${tableStates}")
-        }
-      }
-    }
-  }
-
   def extractTableNamesFromQuery(spark: SparkSession, query: String): String = {
     import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
     val logicalPlan = spark.sessionState.sqlParser.parsePlan(query)
@@ -148,4 +109,44 @@ object MultiStatementUtils {
     val tableNames = Array.tabulate(transactions.length)(t => extractTableNamesFromQuery(spark, transactions(t)))
     tableNames
   }
+
+  def restoreTable(spark: SparkSession, affectedTables: Array[String], tableStates: String): Unit = {
+    for (i <- affectedTables.indices) {
+    spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
+    print(s"${affectedTables(i)} rolled back ")
+  }
+    spark.sql(s"drop table ${tableStates}")
+  }
+
+  def beginTransaction(spark: SparkSession, transactions: Array[String], tableNames: Array[String], tableStates: String): Unit = {
+    import spark.implicits._
+
+    createViews(spark, tableNames)
+    createTableStates(spark, tableStates)
+    val loop = new Breaks
+    loop.breakable {
+      for (j <- transactions.indices) {
+        try {
+          runAndRegisterQuery(spark, tableNames, transactions(j), tableStates, j)
+        } catch {
+          case _: Throwable =>
+            if (isCommitted(spark, tableStates, j, tableNames)) {
+              val affectedTables = tableNames.slice(0, j + 1).distinct
+              restoreTable(spark, affectedTables, tableStates)
+              loop.break
+            }
+            else {
+              val affectedTables = tableNames.slice(0, j).distinct
+              restoreTable(spark, affectedTables, tableStates)
+              loop.break
+            }
+        }
+        if (j == (transactions.indices.length - 1)) {
+          createViews(spark, tableNames)
+          spark.sql(s"drop table ${tableStates}")
+        }
+      }
+    }
+  }
+
 }
