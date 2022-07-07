@@ -40,11 +40,6 @@ object MultiStatementUtils {
       .execute()
   }
 
-  def getInitialTableVersion(spark: SparkSession, tableStates: String, tableNames: Array[String], i: Int): Long = {
-    import spark.implicits._
-    spark.read.format("delta").table(tableStates).where(col("tableName") === tableNames(i)).select(min(col("initialVersion"))).as[Long].head()
-  }
-
   def getVersionBeforeQuery(spark: SparkSession, tableStates: String, i: Int): Long = {
     import spark.implicits._
     spark.read.format("delta").table(tableStates).where(col("transaction_id") === i).select(col("initialVersion")).as[Long].head()
@@ -110,11 +105,17 @@ object MultiStatementUtils {
     tableNames
   }
 
+  def getInitialTableVersion(spark: SparkSession, tableStates: String, tableName: String): Long = {
+    import spark.implicits._
+    spark.read.format("delta").table(tableStates).where(col("tableName") === tableName).select(min(col("initialVersion"))).as[Long].head()
+  }
+
   def restoreTable(spark: SparkSession, affectedTables: Array[String], tableStates: String): Unit = {
     for (i <- affectedTables.indices) {
-    spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
-    print(s"${affectedTables(i)} rolled back ")
-  }
+      val version = getInitialTableVersion(spark, tableStates, affectedTables(i))
+      spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${version}")
+      print(s"${affectedTables(i)} rolled back ")
+    }
     spark.sql(s"drop table ${tableStates}")
   }
 
