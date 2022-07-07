@@ -33,7 +33,7 @@ object MultiStatementUtils {
         s"${tableStates}.transaction_id = updatedTableStates.transaction_id")
       .whenMatched()
       .updateExpr(Map(
-        "initialVersion" -> "updatedTableStates.latestVersion",
+        "latestVersion" -> "updatedTableStates.latestVersion",
         "isCommitted" -> "updatedTableStates.isCommitted"))
       .whenNotMatched()
       .insertAll()
