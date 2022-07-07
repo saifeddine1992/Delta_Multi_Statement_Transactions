@@ -117,7 +117,7 @@ object MultiStatementUtils {
       val deltaTable = DeltaTable.forName(spark, affectedTables(i))
       val version = getInitialTableVersion(spark, tableStates, affectedTables(i))
       deltaTable.restoreToVersion(version)
-      print(s"${affectedTables(i)} rolled back ")
+      print(s"${affectedTables(i)} restored ")
     }
     spark.sql(s"drop table ${tableStates}")
   }
