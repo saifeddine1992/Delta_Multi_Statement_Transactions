@@ -70,17 +70,26 @@ object MultiStatementUtils {
     updateTableStates(spark, commitToTableStates, tableStates)
   }
 
-  def isCommitted(spark: SparkSession, tableStates: String, transaction_id: Int, tableNames: Array[String]) : AnyVal = {
+  def isCommitted(spark: SparkSession, tableStates: String, transaction_id: Int, tableNames: Array[String]): Boolean = {
     import spark.implicits._
 
     val isRegistered = Try {
       spark.read.format("delta").table(tableStates).select("isCommitted").where(col("transaction_id") === transaction_id).as[Boolean].head()
     }.getOrElse(-1L)
 
-    isRegistered match {
-      case true => true
-      case false => if (getCurrentTableVersion(spark, tableNames(transaction_id)) - getVersionBeforeQuery(spark, tableStates, transaction_id) == 1) {true} else {false}
-      case -1 => false
+    if (isRegistered == true) {
+      true
+    }
+    else if (isRegistered == false) {
+      if (getCurrentTableVersion(spark, tableNames(transaction_id)) - getVersionBeforeQuery(spark, tableStates, transaction_id) == 1) {
+        true
+      }
+      else {
+        false
+      }
+    }
+    else {
+      false
     }
   }
 
@@ -95,8 +104,8 @@ object MultiStatementUtils {
         try {
           runAndRegisterQuery(spark, tableNames, transactions(j), tableStates, j)
         } catch {
-          case  _: Throwable =>
-            if (isCommitted(spark, tableStates, j, tableNames) == true){
+          case _: Throwable =>
+            if (isCommitted(spark, tableStates, j, tableNames) == true) {
               val affectedTables = tableNames.slice(0, j).distinct
               for (i <- affectedTables.indices) {
                 spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
@@ -106,14 +115,14 @@ object MultiStatementUtils {
               loop.break
             }
             else {
-              val affectedTables = tableNames.slice(0, j -1).distinct
+              val affectedTables = tableNames.slice(0, j - 1).distinct
               for (i <- affectedTables.indices) {
                 spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
                 print(s"${affectedTables(i)} rolled back ")
               }
               spark.sql(s"drop table ${tableStates}")
               loop.break
-          }
+            }
         }
         if (j == (transactions.indices.length - 1)) {
           createViews(spark, tableNames)
@@ -126,8 +135,8 @@ object MultiStatementUtils {
   def extractTableNamesFromQuery(spark: SparkSession, query: String): String = {
     import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
     val logicalPlan = spark.sessionState.sqlParser.parsePlan(query)
-      val tablesInQuery = logicalPlan.collect { case r: UnresolvedRelation => r.tableName }
-    if (tablesInQuery.nonEmpty){
+    val tablesInQuery = logicalPlan.collect { case r: UnresolvedRelation => r.tableName }
+    if (tablesInQuery.nonEmpty) {
       tablesInQuery.head
     }
     else {
