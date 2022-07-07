@@ -111,9 +111,12 @@ object MultiStatementUtils {
   }
 
   def restoreTable(spark: SparkSession, affectedTables: Array[String], tableStates: String): Unit = {
+    import io.delta.tables._
+
     for (i <- affectedTables.indices) {
+      val deltaTable = DeltaTable.forName(spark, affectedTables(i))
       val version = getInitialTableVersion(spark, tableStates, affectedTables(i))
-      spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${version}")
+      deltaTable.restoreToVersion(version)
       print(s"${affectedTables(i)} rolled back ")
     }
     spark.sql(s"drop table ${tableStates}")
