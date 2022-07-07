@@ -105,8 +105,8 @@ object MultiStatementUtils {
           runAndRegisterQuery(spark, tableNames, transactions(j), tableStates, j)
         } catch {
           case _: Throwable =>
-            if (isCommitted(spark, tableStates, j, tableNames) == true) {
-              val affectedTables = tableNames.slice(0, j).distinct
+            if (isCommitted(spark, tableStates, j, tableNames)) {
+              val affectedTables = tableNames.slice(0, j + 1).distinct
               for (i <- affectedTables.indices) {
                 spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
                 print(s"${affectedTables(i)} rolled back ")
@@ -115,7 +115,7 @@ object MultiStatementUtils {
               loop.break
             }
             else {
-              val affectedTables = tableNames.slice(0, j - 1).distinct
+              val affectedTables = tableNames.slice(0, j).distinct
               for (i <- affectedTables.indices) {
                 spark.sql(s"RESTORE TABLE ${affectedTables(i)} TO VERSION AS OF ${getInitialTableVersion(spark, tableStates, affectedTables, i)} ")
                 print(s"${affectedTables(i)} rolled back ")
