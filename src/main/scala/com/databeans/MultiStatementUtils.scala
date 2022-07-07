@@ -105,7 +105,7 @@ object MultiStatementUtils {
     }
   }
 
-  def createTableNames(spark: SparkSession, transactions: Array[String]): Array[String] = {
+  def extractTableNames(spark: SparkSession, transactions: Array[String]): Array[String] = {
     val tableNames = Array.tabulate(transactions.length)(t => extractTableNamesFromQuery(spark, transactions(t)))
     tableNames
   }
