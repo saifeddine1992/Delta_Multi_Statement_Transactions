@@ -40,7 +40,7 @@ class MultiStatementUtilsSpec extends QueryTest
     val expectedMyFakeTabResult = Seq(Data(4, 2, 3), Data(5, 10, 15)).toDF()
 
     assert(updateResult.collect() sameElements expectedUpdateResult.collect())
-    assert(myFakeTabResult.collect() sameElements expectedMyFakeTabResult.collect())
+    assert(myFakeTabResult.except(expectedMyFakeTabResult).isEmpty)
   }
 
   test("extractTableNamesFromQuery should extract tableNames SQL queries"){
@@ -55,7 +55,7 @@ class MultiStatementUtilsSpec extends QueryTest
     assert(result sameElements expectedUpdateResult)
   }
 
-  test("multiStatementTransaction should rerun multiple non-failing SQL queries"){
+  test("multiStatementTransaction should run multiple failing SQL queries and restore tables"){
     val s = spark
     import s.implicits._
 
@@ -67,17 +67,16 @@ class MultiStatementUtilsSpec extends QueryTest
     val secondDeleteQuery = "DELETE FROM my_fake_tab WHERE value = 5"
     val deleteQuery = "DELETE FROM updates WHERE value = 5"
     val updateQuery = "UPDATE updates SET value = 6 WHERE value = 9"
-    val insertQuery = "INSERT INTO  my_fake_tab VALUES (0, 0, 0)"
+    val insertQuery = "INSERT INTO  my_fake_tab VALUES (0, 0, 0, 0)"
 
     beginTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery, insertQuery), Array("updates", "my_fake_tab", "updates", "my_fake_tab"), "tableStates")
     Thread.sleep(5000)
-    beginTransaction(spark, Array(deleteQuery, secondDeleteQuery, updateQuery, insertQuery), Array("updates", "my_fake_tab", "updates", "my_fake_tab"),"tableStates")
 
     val result = spark.sql("select * from updates_view")
-    val expectedResult = Seq(Data(6, 18, 27)).toDF()
+    val expectedResult = Seq(Data(9, 18, 27), Data(5, 10, 15)).toDF()
     val fakeTabResult = spark.sql("select * from my_fake_tab_view")
-    val expectedFakeTabResult = Seq(Data(1, 2, 3), Data(0, 0, 0)).toDF()
-    assert(result.collect() sameElements expectedResult.collect())
+    val expectedFakeTabResult = Seq(Data(1, 2, 3), Data(5, 10, 15)).toDF()
+    assert(result.except(expectedResult).isEmpty)
     assert(fakeTabResult.except(expectedFakeTabResult).isEmpty)
   }
 }
