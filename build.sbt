@@ -5,7 +5,6 @@ version := "0.1"
 scalaVersion := "2.12.10"
 val sparkVersion = "3.1.1"
 val deltaVersion = "1.2.0"
-
 libraryDependencies += "org.scalactic" %% "scalactic" % "3.1.1"
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.1.1" % "test"
 
