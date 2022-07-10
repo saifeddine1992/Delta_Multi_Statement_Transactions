@@ -5,6 +5,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{col, max, min}
 import scala.util.Try
 import scala.util.control.Breaks
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 
 case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long, isCommitted: Boolean)
 
@@ -89,7 +90,6 @@ object MultiStatementUtils {
   }
 
   def extractTableNamesFromQuery(spark: SparkSession, query: String): String = {
-    import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
     val logicalPlan = spark.sessionState.sqlParser.parsePlan(query)
     val tablesInQuery = logicalPlan.collect { case r: UnresolvedRelation => r.tableName }
     if (tablesInQuery.nonEmpty) {
