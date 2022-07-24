@@ -1,31 +1,29 @@
 package com.databeans
 
-import org.apache.spark.sql.{QueryTest, SparkSession}
+import org.apache.spark.sql.QueryTest
 import com.databeans.MultiStatementUtils._
-import org.apache.spark.sql.delta.test.DeltaExtendedSparkSession
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.delta.test.DeltaExtendedSparkSession
 
 
 case class Data(value: Long, keys: Long, option: Long)
 
 class MultiStatementUtilsSpec extends QueryTest
-  with SharedSparkSession
-  with DeltaExtendedSparkSession{
+  with SharedSparkSession with DeltaExtendedSparkSession {
+
 
   test("beginTransaction should run multiple non-failing SQL queries"){
-    val spark: SparkSession = SparkSession
-      .builder()
-      .master("local[*]")
-      .appName("multi-statement transaction")
-      .getOrCreate()
     val s = spark
     import s.implicits._
 
+    sql("create database user_db")
+    sql("use user_db")
+
     val data = Seq(1, 5).toDF().withColumn("keys", col("value") * 2).withColumn("option", col("value") * 3)
-    data.write.format("delta").saveAsTable("my_fake_table")
+    data.repartition(1).write.mode("append").format("delta").saveAsTable("my_fake_table")
     val updatesData = Seq(9, 5).toDF().withColumn("keys", col("value") * 2).withColumn("option", col("value") * 3)
-    updatesData.write.format("delta").saveAsTable("update")
+    updatesData.repartition(1).write.mode("append").format("delta").saveAsTable("update")
 
     val deleteQuery = "DELETE FROM update WHERE value = 5"
     val updateQuery = "UPDATE my_fake_table SET value = 4 WHERE value = 1"

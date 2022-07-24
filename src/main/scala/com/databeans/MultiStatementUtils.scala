@@ -43,13 +43,18 @@ object MultiStatementUtils {
 
   def getVersionBeforeQuery(spark: SparkSession, tableStates: String, i: Int): Long = {
     import spark.implicits._
-    spark.read.format("delta").table(tableStates).where(col("transaction_id") === i).select(col("initialVersion")).as[Long].head()
+    spark.read.format("delta").table(tableStates)
+      .where(col("transaction_id") === i)
+      .select(col("initialVersion"))
+      .as[Long].head()
   }
 
   def createViews(spark: SparkSession, tableNames: Array[String]): Unit = {
     val distinctTables = tableNames.distinct
     for (i <- distinctTables.indices) {
-      spark.read.format("delta").option("versionAsOf", getCurrentTableVersion(spark, distinctTables(i))).table(distinctTables(i)).createOrReplaceTempView(distinctTables(i) + "_view")
+      spark.read.format("delta")
+        .option("versionAsOf", getCurrentTableVersion(spark, distinctTables(i))).table(distinctTables(i))
+        .createOrReplaceTempView(distinctTables(i) + "_view")
     }
   }
 
@@ -70,7 +75,10 @@ object MultiStatementUtils {
     import spark.implicits._
 
     val isRegistered = Try {
-      spark.read.format("delta").table(tableStates).select("isCommitted").where(col("transaction_id") === transaction_id).as[Boolean].head()
+      spark.read.format("delta").table(tableStates)
+        .select("isCommitted")
+        .where(col("transaction_id") === transaction_id)
+        .as[Boolean].head()
     }.getOrElse(-1L)
 
     if (isRegistered == true) {
@@ -107,7 +115,10 @@ object MultiStatementUtils {
 
   def getInitialTableVersion(spark: SparkSession, tableStates: String, tableName: String): Long = {
     import spark.implicits._
-    spark.read.format("delta").table(tableStates).where(col("tableName") === tableName).select(min(col("initialVersion"))).as[Long].head()
+    spark.read.format("delta").table(tableStates)
+      .where(col("tableName") === tableName)
+      .select(min(col("initialVersion")))
+      .as[Long].head()
   }
 
   def restoreTable(spark: SparkSession, affectedTables: Array[String], tableStates: String): Unit = {
