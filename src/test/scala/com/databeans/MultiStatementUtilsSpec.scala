@@ -13,36 +13,39 @@ class MultiStatementUtilsSpec extends QueryTest
   with SharedSparkSession with DeltaExtendedSparkSession {
 
 
-  test("beginTransaction should run multiple non-failing SQL queries"){
-    val s = spark
-    import s.implicits._
+  test("beginTransaction should run multiple non-failing SQL queries") {
+    withTempDir { dir =>
 
-    sql("create database user_db")
-    sql("use user_db")
+      val s = spark
+      import s.implicits._
 
-    val data = Seq(1, 5).toDF().withColumn("keys", col("value") * 2).withColumn("option", col("value") * 3)
-    data.repartition(1).write.mode("append").format("delta").saveAsTable("my_fake_table")
-    val updatesData = Seq(9, 5).toDF().withColumn("keys", col("value") * 2).withColumn("option", col("value") * 3)
-    updatesData.repartition(1).write.mode("append").format("delta").saveAsTable("update")
+      sql("create database user_db")
+      sql("use user_db")
 
-    val deleteQuery = "DELETE FROM update WHERE value = 5"
-    val updateQuery = "UPDATE my_fake_table SET value = 4 WHERE value = 1"
+      val data = Seq(1, 5).toDF().withColumn("keys", col("value") * 2).withColumn("option", col("value") * 3)
+      data.repartition(1).write.mode("append").format("delta").saveAsTable( "my_fake_table")
+      val updatesData = Seq(9, 5).toDF().withColumn("keys", col("value") * 2).withColumn("option", col("value") * 3)
+      updatesData.repartition(1).write.mode("append").format("delta").saveAsTable("update")
 
-    beginTransaction(spark, Array(deleteQuery, updateQuery), Array("update", "my_fake_table"), "tableStates")
-    Thread.sleep(5000)
+      val deleteQuery = "DELETE FROM update WHERE value = 5"
+      val updateQuery = "UPDATE my_fake_table SET value = 4 WHERE value = 1"
 
-    val updateResult = spark.sql("select * from update_view")
-    val expectedUpdateResult = Seq(Data(9, 18, 27)).toDF()
+      beginTransaction(spark, Array(deleteQuery, updateQuery), Array("update", "my_fake_table"), "tableStates")
+      Thread.sleep(5000)
 
-    val myFakeTabResult = spark.sql("select * from my_fake_table_view")
-    val expectedMyFakeTabResult = Seq(Data(4, 2, 3), Data(5, 10, 15)).toDF()
+      val updateResult = spark.sql("select * from update_view")
+      val expectedUpdateResult = Seq(Data(9, 18, 27)).toDF()
 
-    assert(updateResult.collect() sameElements expectedUpdateResult.collect())
-    assert(myFakeTabResult.except(expectedMyFakeTabResult).isEmpty)
+      val myFakeTabResult = spark.sql("select * from my_fake_table_view")
+      val expectedMyFakeTabResult = Seq(Data(4, 2, 3), Data(5, 10, 15)).toDF()
+
+      assert(updateResult.collect() sameElements expectedUpdateResult.collect())
+      assert(myFakeTabResult.except(expectedMyFakeTabResult).isEmpty)
+      sql("drop database user_db cascade")
+    }
   }
 
   test("extractTableNamesFromQuery should extract tableNames SQL queries"){
-    val s = spark
 
     val deleteQuery = "DELETE FROM updates WHERE value = 5"
     val updateQuery = "UPDATE my_fake_tab SET value = 4 WHERE value = 1"

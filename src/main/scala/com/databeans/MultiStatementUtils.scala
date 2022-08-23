@@ -7,7 +7,6 @@ import scala.util.Try
 import scala.util.control.Breaks
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 
-case class TableStates(transaction_id: Int, tableName: String, initialVersion: Long, latestVersion: Long, isCommitted: Boolean)
 
 object MultiStatementUtils {
 
